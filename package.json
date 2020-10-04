@@ -1,0 +1,22 @@
+{
+  "name": "achievement-bot",
+  "type": "module",
+  "version": "0.0.1",
+  "description": "a telegram bot to post custom xbox-style achievement stickers",
+  "main": "server.js",
+  "repository": "https://github.com/iliazeus/achievement-bot",
+  "author": "Ilia Pozdnyakov <ilia.pozdnyakov@ya.ru>",
+  "license": "MIT",
+  "private": true,
+  "engines": {
+    "node": "^14.0.0"
+  },
+  "dependencies": {
+    "capitalize": "^2.0.3",
+    "express": "^4.17.1",
+    "form-data": "^3.0.0",
+    "jimp": "^0.16.1",
+    "node-fetch": "^2.6.1",
+    "sharp": "^0.26.1"
+  }
+}
