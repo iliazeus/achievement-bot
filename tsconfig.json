@@ -1,0 +1,12 @@
+{
+  "compilerOptions": {
+    "noEmit": true,
+    "allowJs": true,
+    "checkJs": true,
+    "module": "esnext",
+    "target": "esnext",
+    "lib": ["ESNext"],
+    "allowSyntheticDefaultImports": true,
+    "moduleResolution": "node"
+  }
+}
