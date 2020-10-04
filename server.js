@@ -6,6 +6,36 @@ import FormData from "form-data";
 import fetch from "node-fetch";
 import jimp from "jimp";
 import sharp from "sharp";
+import winston from "winston";
+
+const logger = winston.createLogger({
+  transports: [
+    new winston.transports.Console({
+      level: "info",
+      format: winston.format.combine(
+        winston.format.colorize(),
+        winston.format.timestamp(),
+        winston.format.printf(({ level, message, label, timestamp }) => {
+          return `${timestamp} [${label ?? "global"}] ${level}: ${message}`;
+        })
+      ),
+      handleExceptions: true,
+    }),
+    new winston.transports.File({
+      level: "verbose",
+      format: winston.format.combine(
+        winston.format.timestamp(),
+        winston.format.printf(({ level, label, timestamp, ...rest }) => {
+          return `${timestamp} [${label ?? "global"}] ${level}: ${JSON.stringify(rest)}`;
+        })
+      ),
+      filename: "server.log",
+      handleExceptions: true,
+    }),
+  ],
+});
+
+logger.info(`app starting`);
 
 const USE_WEBHOOK = env.npm_package_config_useWebhook;
 
@@ -20,17 +50,31 @@ const WEBHOOK_PORT = env.npm_package_config_webhookPort;
 const TEMPLATE_PATH = env.npm_package_config_templatePath;
 const FONT_PATH = env.npm_package_config_fontPath;
 
+logger.info(`loading template file ${TEMPLATE_PATH}`);
 const JIMP_TEMPLATE = await jimp.create(TEMPLATE_PATH);
+
+logger.info(`loading font file ${FONT_PATH}`);
 const JIMP_FONT = await jimp.loadFont(FONT_PATH);
 
 const handleUpdates = async (updates) => {
   for (const update of updates) {
+    const updateLogger = logger.child({ label: update.update_id });
+
+    updateLogger.info(`handling update with id ${update.update_id}`);
+    updateLogger.verbose(`update contents`, { update });
+
     const query = update.inline_query;
     if (!query) continue;
+
+    updateLogger.info(`handling query with id ${query.id}`);
+
+    updateLogger.info(`creating jimp image`);
 
     const jimpImage = JIMP_TEMPLATE.clone();
 
     jimpImage.print(JIMP_FONT, 200, 50, capitalize.words(query.query));
+
+    updateLogger.info(`creating sharp image`);
 
     const sharpImage = sharp(jimpImage.bitmap.data, {
       raw: {
@@ -40,11 +84,17 @@ const handleUpdates = async (updates) => {
       },
     });
 
+    updateLogger.info(`converting to webp`);
+
     const webpBuffer = await sharpImage.webp({ lossless: true }).toBuffer();
+
+    updateLogger.info(`uploading to temp chat`);
 
     const tempChatRequest = new FormData();
     tempChatRequest.append("chat_id", TEMP_CHAT_ID);
     tempChatRequest.append("document", webpBuffer, { contentType: "image/webp", filename: `${query.id}.webp` });
+
+    updateLogger.verbose(`request to sendDocument`);
 
     const tempChatResponse = await (
       await fetch(`${TELEGRAM_API_URL}/sendDocument`, {
@@ -53,8 +103,14 @@ const handleUpdates = async (updates) => {
       })
     ).json();
 
+    updateLogger.verbose(`response from sendDocument`, { response: tempChatResponse });
+
+    if (!tempChatResponse.ok) throw new Error(tempChatResponse.error);
+
     const tempChatMessage = tempChatResponse.result;
     const tempStickerFileId = tempChatMessage.sticker.file_id;
+
+    updateLogger.info(`sending inline query answer`);
 
     const answer = {
       inline_query_id: query.id,
@@ -67,6 +123,8 @@ const handleUpdates = async (updates) => {
       ],
     };
 
+    updateLogger.verbose(`answer contents`, { answer });
+
     await fetch(`${TELEGRAM_API_URL}/answerInlineQuery`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -74,6 +132,8 @@ const handleUpdates = async (updates) => {
     });
 
     setTimeout(async () => {
+      updateLogger.info(`deleting temp chat message`);
+
       await fetch(`${TELEGRAM_API_URL}/deleteMessage`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -89,8 +149,13 @@ if (USE_WEBHOOK) {
   app.use(express.json());
 
   app.post(WEBHOOK_ENDPOINT, async (request, response) => {
-    await handleUpdates(request.body);
-    response.status(200);
+    try {
+      await handleUpdates(request.body);
+      response.status(200);
+    } catch (error) {
+      logger.error(`error handling updates`, { error });
+      response.status(500);
+    }
   });
 
   app.listen(WEBHOOK_PORT);
@@ -100,16 +165,10 @@ if (USE_WEBHOOK) {
   const fetchUpdates = async () => {
     let response;
 
-    try {
-      response = await fetch(`${TELEGRAM_API_URL}/getUpdates?offset=${offset}`, { timeout: 0 });
-    } catch (error) {
-      return [];
-    }
+    response = await fetch(`${TELEGRAM_API_URL}/getUpdates?offset=${offset}`, { timeout: 0 });
 
     const json = await response.json();
-    if (!json.ok) {
-      throw new Error(json.error);
-    }
+    if (!json.ok) throw new Error(json.error);
 
     const updates = json.result;
     if (updates.length > 0) offset = updates[updates.length - 1].update_id + 1;
@@ -117,10 +176,29 @@ if (USE_WEBHOOK) {
     return updates;
   };
 
-  await fetchUpdates();
+  logger.info(`fetching and discarding unanswered updates`);
+
+  try {
+    await fetchUpdates();
+  } catch (error) {
+    logger.error(`error fetching updates`, { error });
+  }
 
   while (true) {
-    const updates = await fetchUpdates();
-    await handleUpdates(updates);
+    let updates;
+
+    try {
+      updates = await fetchUpdates();
+    } catch (error) {
+      logger.error(`error fetching updates`, { error });
+      continue;
+    }
+
+    try {
+      await handleUpdates(updates);
+    } catch (error) {
+      logger.error(`error handling updates`, { error });
+      continue;
+    }
   }
 }
