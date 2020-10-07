@@ -92,18 +92,19 @@ const handleUpdates = async (updates) => {
 
     const tempChatRequest = new FormData();
     tempChatRequest.append("chat_id", TEMP_CHAT_ID);
-    tempChatRequest.append("document", webpBuffer, { contentType: "image/webp", filename: `${query.id}.webp` });
+    tempChatRequest.append("sticker", webpBuffer, { contentType: "image/webp", filename: `${query.id}.webp` });
+    tempChatRequest.append("disable_notification", "true");
 
-    updateLogger.verbose(`request to sendDocument`);
+    updateLogger.verbose(`request to sendSticker`);
 
     const tempChatResponse = await (
-      await fetch(`${TELEGRAM_API_URL}/sendDocument`, {
+      await fetch(`${TELEGRAM_API_URL}/sendSticker`, {
         method: "POST",
         body: tempChatRequest,
       })
     ).json();
 
-    updateLogger.verbose(`response from sendDocument`, { response: tempChatResponse });
+    updateLogger.verbose(`response from sendSticker`, { response: tempChatResponse });
 
     if (!tempChatResponse.ok) throw new Error(tempChatResponse.error);
 
