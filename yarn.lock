@@ -192,6 +192,14 @@
     "@babel/runtime" "^7.7.2"
     "@jimp/utils" "^0.16.1"
 
+"@jimp/plugin-print@./jimp-plugin-print-v0.16.2.tgz":
+  version "0.16.2"
+  resolved "./jimp-plugin-print-v0.16.2.tgz#bee17b0cf40ab0f89765a376334d8795c581bf5b"
+  dependencies:
+    "@babel/runtime" "^7.7.2"
+    "@jimp/utils" "link:../../.cache/yarn/v6/.tmp/utils"
+    load-bmfont "^1.4.0"
+
 "@jimp/plugin-print@^0.16.1":
   version "0.16.1"
   resolved "https://registry.yarnpkg.com/@jimp/plugin-print/-/plugin-print-0.16.1.tgz#66b803563f9d109825970714466e6ab9ae639ff6"
@@ -307,6 +315,10 @@
   dependencies:
     "@babel/runtime" "^7.7.2"
     regenerator-runtime "^0.13.3"
+
+"@jimp/utils@link:../../.cache/yarn/v6/.tmp/utils":
+  version "0.0.0"
+  uid ""
 
 "@types/body-parser@*":
   version "1.19.0"

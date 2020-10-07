@@ -12,6 +12,8 @@
     "node": "^14.0.0"
   },
   "dependencies": {
+    "@jimp/custom": "^0.16.1",
+    "@jimp/plugin-print": "./jimp-plugin-print-v0.16.2.tgz",
     "capitalize": "^2.0.3",
     "express": "^4.17.1",
     "form-data": "^3.0.0",

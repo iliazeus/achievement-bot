@@ -8,6 +8,12 @@ import jimp from "jimp";
 import sharp from "sharp";
 import winston from "winston";
 
+// fixes https://github.com/oliver-moran/jimp/pull/951
+// TODO: remove when merged
+import configureJimp from "@jimp/custom";
+import jimpPrintPlugin from "@jimp/plugin-print";
+configureJimp({ plugins: [jimpPrintPlugin] }, jimp);
+
 const logger = winston.createLogger({
   transports: [
     new winston.transports.Console({
