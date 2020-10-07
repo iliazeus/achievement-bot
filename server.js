@@ -45,10 +45,12 @@ const TELEGRAM_API_URL = `https://api.telegram.org/bot${TELEGRAM_TOKEN}`;
 const TEMP_CHAT_ID = env.npm_package_config_tempChatId;
 
 const WEBHOOK_ENDPOINT = env.npm_package_config_webhookEndpoint;
-const WEBHOOK_PORT = env.npm_package_config_webhookPort;
+const WEBHOOK_PORT = Number.parseInt(env.npm_package_config_webhookPort);
 
 const TEMPLATE_PATH = env.npm_package_config_templatePath;
 const FONT_PATH = env.npm_package_config_fontPath;
+const MAX_TEXT_WIDTH = Number.parseInt(env.npm_package_config_maxTextWidth);
+const TEXT_X = Number.parseInt(env.npm_package_config_textX);
 
 logger.info(`loading template file ${TEMPLATE_PATH}`);
 const JIMP_TEMPLATE = await jimp.create(TEMPLATE_PATH);
@@ -72,7 +74,15 @@ const handleUpdates = async (updates) => {
 
     const jimpImage = JIMP_TEMPLATE.clone();
 
-    jimpImage.print(JIMP_FONT, 200, 50, capitalize.words(query.query));
+    const imageText = capitalize.words(query.query);
+    const imageHeight = jimpImage.getHeight();
+
+    const textHeight = jimp.measureTextHeight(JIMP_FONT, imageText, MAX_TEXT_WIDTH);
+
+    const imageTextX = TEXT_X;
+    const imageTextY = Math.floor((imageHeight - textHeight) / 2);
+
+    jimpImage.print(JIMP_FONT, imageTextX, imageTextY, imageText, MAX_TEXT_WIDTH);
 
     updateLogger.info(`creating sharp image`);
 
