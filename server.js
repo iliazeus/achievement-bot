@@ -1,3 +1,5 @@
+import fs from "fs";
+import https from "https";
 import { env } from "process";
 
 import capitalize from "capitalize";
@@ -53,6 +55,9 @@ const TEMP_CHAT_ID = env.npm_package_config_tempChatId;
 const WEBHOOK_ENDPOINT = env.npm_package_config_webhookEndpoint;
 const WEBHOOK_PORT = Number.parseInt(env.npm_package_config_webhookPort);
 
+const WEBHOOK_PRIVATE_KEY_PATH = env.npm_package_config_webhookPrivateKeyPath;
+const WEBHOOK_CERTIFICATE_PATH = env.npm_package_config_webhookCertificatePath;
+
 const TEMPLATE_PATH = env.npm_package_config_templatePath;
 const FONT_PATH = env.npm_package_config_fontPath;
 const MAX_TEXT_WIDTH = Number.parseInt(env.npm_package_config_maxTextWidth);
@@ -64,100 +69,98 @@ const JIMP_TEMPLATE = await jimp.create(TEMPLATE_PATH);
 logger.info(`loading font file ${FONT_PATH}`);
 const JIMP_FONT = await jimp.loadFont(FONT_PATH);
 
-const handleUpdates = async (updates) => {
-  for (const update of updates) {
-    const updateLogger = logger.child({ label: update.update_id });
+const handleUpdate = async (update) => {
+  const updateLogger = logger.child({ label: update.update_id });
 
-    updateLogger.info(`handling update with id ${update.update_id}`);
-    updateLogger.verbose(`update contents`, { update });
+  updateLogger.info(`handling update with id ${update.update_id}`);
+  updateLogger.verbose(`update contents`, { update });
 
-    const query = update.inline_query;
-    if (!query) continue;
+  const query = update.inline_query;
+  if (!query) return;
 
-    updateLogger.info(`handling query with id ${query.id}`);
+  updateLogger.info(`handling query with id ${query.id}`);
 
-    updateLogger.info(`creating jimp image`);
+  updateLogger.info(`creating jimp image`);
 
-    const jimpImage = JIMP_TEMPLATE.clone();
+  const jimpImage = JIMP_TEMPLATE.clone();
 
-    const imageText = capitalize.words(query.query);
-    const imageHeight = jimpImage.getHeight();
+  const imageText = capitalize.words(query.query);
+  const imageHeight = jimpImage.getHeight();
 
-    const textHeight = jimp.measureTextHeight(JIMP_FONT, imageText, MAX_TEXT_WIDTH);
+  const textHeight = jimp.measureTextHeight(JIMP_FONT, imageText, MAX_TEXT_WIDTH);
 
-    const imageTextX = TEXT_X;
-    const imageTextY = Math.floor((imageHeight - textHeight) / 2);
+  const imageTextX = TEXT_X;
+  const imageTextY = Math.floor((imageHeight - textHeight) / 2);
 
-    jimpImage.print(JIMP_FONT, imageTextX, imageTextY, imageText, MAX_TEXT_WIDTH);
+  jimpImage.print(JIMP_FONT, imageTextX, imageTextY, imageText, MAX_TEXT_WIDTH);
 
-    updateLogger.info(`creating sharp image`);
+  updateLogger.info(`creating sharp image`);
 
-    const sharpImage = sharp(jimpImage.bitmap.data, {
-      raw: {
-        width: jimpImage.bitmap.width,
-        height: jimpImage.bitmap.height,
-        channels: 4,
+  const sharpImage = sharp(jimpImage.bitmap.data, {
+    raw: {
+      width: jimpImage.bitmap.width,
+      height: jimpImage.bitmap.height,
+      channels: 4,
+    },
+  });
+
+  updateLogger.info(`converting to webp`);
+
+  const webpBuffer = await sharpImage.webp({ lossless: true }).toBuffer();
+
+  updateLogger.info(`uploading to temp chat`);
+
+  const tempChatRequest = new FormData();
+  tempChatRequest.append("chat_id", TEMP_CHAT_ID);
+  tempChatRequest.append("sticker", webpBuffer, { contentType: "image/webp", filename: `${query.id}.webp` });
+  tempChatRequest.append("disable_notification", "true");
+
+  updateLogger.verbose(`request to sendSticker`);
+
+  const tempChatResponse = await (
+    await fetch(`${TELEGRAM_API_URL}/sendSticker`, {
+      method: "POST",
+      body: tempChatRequest,
+    })
+  ).json();
+
+  updateLogger.verbose(`response from sendSticker`, { response: tempChatResponse });
+
+  if (!tempChatResponse.ok) throw new Error(tempChatResponse.error);
+
+  const tempChatMessage = tempChatResponse.result;
+  const tempStickerFileId = tempChatMessage.sticker.file_id;
+
+  updateLogger.info(`sending inline query answer`);
+
+  const answer = {
+    inline_query_id: query.id,
+    results: [
+      {
+        type: "sticker",
+        id: query.id,
+        sticker_file_id: tempStickerFileId,
       },
-    });
+    ],
+  };
 
-    updateLogger.info(`converting to webp`);
+  updateLogger.verbose(`answer contents`, { answer });
 
-    const webpBuffer = await sharpImage.webp({ lossless: true }).toBuffer();
+  await fetch(`${TELEGRAM_API_URL}/answerInlineQuery`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(answer),
+  });
 
-    updateLogger.info(`uploading to temp chat`);
+  setTimeout(async () => {
+    updateLogger.info(`deleting temp chat message`);
 
-    const tempChatRequest = new FormData();
-    tempChatRequest.append("chat_id", TEMP_CHAT_ID);
-    tempChatRequest.append("sticker", webpBuffer, { contentType: "image/webp", filename: `${query.id}.webp` });
-    tempChatRequest.append("disable_notification", "true");
-
-    updateLogger.verbose(`request to sendSticker`);
-
-    const tempChatResponse = await (
-      await fetch(`${TELEGRAM_API_URL}/sendSticker`, {
-        method: "POST",
-        body: tempChatRequest,
-      })
-    ).json();
-
-    updateLogger.verbose(`response from sendSticker`, { response: tempChatResponse });
-
-    if (!tempChatResponse.ok) throw new Error(tempChatResponse.error);
-
-    const tempChatMessage = tempChatResponse.result;
-    const tempStickerFileId = tempChatMessage.sticker.file_id;
-
-    updateLogger.info(`sending inline query answer`);
-
-    const answer = {
-      inline_query_id: query.id,
-      results: [
-        {
-          type: "sticker",
-          id: query.id,
-          sticker_file_id: tempStickerFileId,
-        },
-      ],
-    };
-
-    updateLogger.verbose(`answer contents`, { answer });
-
-    await fetch(`${TELEGRAM_API_URL}/answerInlineQuery`, {
+    await fetch(`${TELEGRAM_API_URL}/deleteMessage`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(answer),
+      body: JSON.stringify({ chat_id: TEMP_CHAT_ID, message_id: tempChatMessage.message_id }),
     });
-
-    setTimeout(async () => {
-      updateLogger.info(`deleting temp chat message`);
-
-      await fetch(`${TELEGRAM_API_URL}/deleteMessage`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chat_id: TEMP_CHAT_ID, message_id: tempChatMessage.message_id }),
-      });
-    }, 1 * 1000);
-  }
+  }, 1 * 1000);
 };
 
 if (USE_WEBHOOK) {
@@ -165,17 +168,30 @@ if (USE_WEBHOOK) {
 
   app.use(express.json());
 
+  logger.info(`setting up api on endpoint ${WEBHOOK_ENDPOINT}`);
   app.post(WEBHOOK_ENDPOINT, async (request, response) => {
     try {
-      await handleUpdates(request.body);
+      await handleUpdate(request.body);
       response.status(200);
+      response.send();
     } catch (error) {
       logger.error(`error handling updates`, { error });
       response.status(500);
+      response.send();
     }
   });
 
-  app.listen(WEBHOOK_PORT);
+  logger.info(`loading private key`);
+  const key = await fs.promises.readFile(WEBHOOK_PRIVATE_KEY_PATH, "utf-8");
+
+  logger.info(`loading certificate`);
+  const cert = await fs.promises.readFile(WEBHOOK_CERTIFICATE_PATH, "utf-8");
+
+  logger.info(`starting server`);
+  const server = https.createServer({ key, cert }, app);
+  server.listen(WEBHOOK_PORT);
+
+  logger.info(`server listening on port ${WEBHOOK_PORT}`);
 } else {
   let offset = 0;
 
@@ -211,11 +227,13 @@ if (USE_WEBHOOK) {
       continue;
     }
 
-    try {
-      await handleUpdates(updates);
-    } catch (error) {
-      logger.error(`error handling updates`, { error });
-      continue;
+    for (const update of updates) {
+      try {
+        await handleUpdate(update);
+      } catch (error) {
+        logger.error(`error handling updates`, { error });
+        continue;
+      }
     }
   }
 }

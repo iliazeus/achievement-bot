@@ -1,6 +1,10 @@
 # Package config overrides
 .npmrc
 
+# TLS certs
+*.key
+*.pem
+
 # Logs
 logs
 *.log
