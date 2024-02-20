@@ -1,7 +1,7 @@
 FROM golang:1.22-bookworm as golang
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y apt-file libwebp-dev
+RUN apt-get update && apt-get install -y libwebp-dev
 
 COPY ["go.mod", "go.sum", "./"]
 RUN go mod download && go mod verify
