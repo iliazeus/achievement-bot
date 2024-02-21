@@ -1,29 +1,20 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"net/http"
 
 	// "crypto/tls"
-	"image"
-	"image/color"
+
 	"log/slog"
 	"os"
 	"strconv"
 	"time"
 
-	"github.com/fogleman/gg"
-	"github.com/kolesa-team/go-webp/webp"
-
 	// "net/http"
 	// "net/url"
 
-	"golang.org/x/image/font"
-	"golang.org/x/image/font/gofont/goregular"
-	"golang.org/x/image/font/opentype"
-
-	"github.com/iliazeus/achievement-bot/internal/assets"
+	"github.com/iliazeus/achievement-bot/internal/sticker"
 	"github.com/iliazeus/achievement-bot/internal/tg"
 	_ "github.com/joho/godotenv/autoload"
 )
@@ -34,37 +25,10 @@ func main() {
 	// proxyUrl, _ := url.Parse("http://127.0.0.1:8080")
 	// http.DefaultClient.Transport = &http.Transport{Proxy: http.ProxyURL(proxyUrl), TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}
 
-	var templateImage image.Image
-	{
-		file, err := assets.FS.Open("template.png")
-		if err != nil {
-			slog.Error(err.Error())
-			os.Exit(1)
-		}
-
-		templateImage, _, err = image.Decode(file)
-		if err != nil {
-			slog.Error(err.Error())
-			os.Exit(1)
-		}
-	}
-
-	var fontFace font.Face
-	{
-		font, err := opentype.Parse(goregular.TTF)
-		if err != nil {
-			slog.Error(err.Error())
-			os.Exit(1)
-		}
-
-		fontFace, err = opentype.NewFace(font, &opentype.FaceOptions{
-			Size: 48,
-			DPI:  72,
-		})
-		if err != nil {
-			slog.Error(err.Error())
-			os.Exit(1)
-		}
+	stickerMaker, err := sticker.NewStickerMaker()
+	if err != nil {
+		slog.Error(err.Error())
+		os.Exit(1)
 	}
 
 	var tempChatId int
@@ -100,26 +64,13 @@ func main() {
 			slog := slog.With("inline_query.id", query.ID)
 			slog.Info("got inline query", "query", query.Query)
 
-			canvas := gg.NewContextForImage(templateImage)
-
-			canvas.SetColor(color.White)
-			canvas.SetFontFace(fontFace)
-			canvas.DrawStringWrapped(
-				query.Query,
-				180, 80, // x, y
-				0.0, 0.7, // anchorX, anchorY; mostly found by trial & error
-				500, 1.0, // width, lineSpacing
-				gg.AlignLeft,
-			)
-
-			buf := &bytes.Buffer{}
-			err := webp.Encode(buf, canvas.Image(), nil)
+			sticker, err := stickerMaker.MakeSticker(query.Query)
 			if err != nil {
 				slog.Error(err.Error())
 				return
 			}
 
-			msg, err := client.SendSticker(ctx, tempChatId, buf.Bytes())
+			msg, err := client.SendSticker(ctx, tempChatId, sticker)
 			if err != nil {
 				slog.Error(err.Error())
 				return
