@@ -2,6 +2,9 @@ package main
 
 import (
 	"bytes"
+	"context"
+	"net/http"
+
 	// "crypto/tls"
 	"image"
 	"image/color"
@@ -64,8 +67,6 @@ func main() {
 		}
 	}
 
-	// var fontFace = opentype.NewFace()
-
 	var tempChatId int
 	{
 		val, err := strconv.Atoi(os.Getenv("TELEGRAM_TEMP_CHAT_ID"))
@@ -76,13 +77,13 @@ func main() {
 		tempChatId = val
 	}
 
-	bot, err := tg.NewBot(os.Getenv("TELEGRAM_BOT_TOKEN"))
+	client, err := tg.NewClient(http.DefaultClient, os.Getenv("TELEGRAM_BOT_TOKEN"))
 	if err != nil {
 		slog.Error(err.Error())
 		os.Exit(1)
 	}
 
-	err = bot.Run(func(upd *tg.Update, err error) {
+	err = client.RunUpdateLoop(context.Background(), func(ctx context.Context, upd *tg.Update, err error) {
 		if err != nil {
 			slog.Error(err.Error())
 			time.Sleep(1 * time.Second)
@@ -118,19 +119,16 @@ func main() {
 				return
 			}
 
-			msg, err := tg.SendStickerBytes{
-				ChatId:       tempChatId,
-				StickerBytes: buf.Bytes(),
-			}.Request(bot)
+			msg, err := client.SendSticker(ctx, tempChatId, buf.Bytes())
 			if err != nil {
 				slog.Error(err.Error())
 				return
 			}
 
-			err = tg.AnswerInlineQueryWithStickers{
-				InlineQueryID:  query.ID,
-				StickerFileIDs: []string{msg.Sticker.FileID},
-			}.Request(bot)
+			err = client.AnswerInlineQuery(
+				ctx, query.ID,
+				tg.InlineQueryAnswer{ID: 0, Type: "sticker", StickerFileID: msg.Sticker.FileID},
+			)
 			if err != nil {
 				slog.Error(err.Error())
 				return
