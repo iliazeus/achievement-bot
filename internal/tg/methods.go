@@ -7,9 +7,13 @@ import (
 	"io"
 	"mime/multipart"
 	"strconv"
+	"time"
 )
 
 func (cl *Client) DeleteWebhook(ctx context.Context) error {
+	ctx, cancel := context.WithTimeout(ctx, defaultTimeout)
+	defer cancel()
+
 	req, err := cl.newRequest(ctx)
 	if err != nil {
 		return err
@@ -27,6 +31,9 @@ func (cl *Client) GetUpdates(
 	offset int,
 	timeout int,
 ) ([]Update, error) {
+	ctx, cancel := context.WithTimeout(ctx, time.Duration(timeout+10)*time.Second)
+	defer cancel()
+
 	req, err := cl.newRequest(ctx)
 	if err != nil {
 		return nil, err
@@ -50,6 +57,9 @@ func (cl *Client) SendSticker(
 	chatId int,
 	sticker []byte,
 ) (*Message, error) {
+	ctx, cancel := context.WithTimeout(ctx, defaultTimeout)
+	defer cancel()
+
 	req, err := cl.newRequest(ctx)
 	if err != nil {
 		return nil, err
@@ -84,6 +94,9 @@ func (cl *Client) AnswerInlineQuery(
 	inlineQueryId string,
 	answers ...InlineQueryAnswer,
 ) error {
+	ctx, cancel := context.WithTimeout(ctx, defaultTimeout)
+	defer cancel()
+
 	req, err := cl.newRequest(ctx)
 	if err != nil {
 		return err

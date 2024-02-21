@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"time"
 )
 
 type HTTPClient interface {
@@ -30,6 +31,8 @@ func NewClient(httpClient HTTPClient, botToken string) (*Client, error) {
 
 	return &client, nil
 }
+
+const defaultTimeout = 10 * time.Second
 
 func (cl *Client) newRequest(ctx context.Context) (*http.Request, error) {
 	req, err := http.NewRequestWithContext(ctx, "", cl.baseUrl, nil)
