@@ -1,15 +1,16 @@
-FROM golang:1.22-bookworm as golang
+FROM golang:1.22-alpine as build
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y libwebp-dev
+RUN apk add gcc musl-dev libwebp-dev libwebp-static
 
 COPY ["go.mod", "go.sum", "./"]
 RUN go mod download && go mod verify
 
 COPY ./ ./
-RUN CGO_ENABLED=1 go build -o app ./
+RUN CGO_ENABLED=1 CGO_LDFLAGS='-lsharpyuv' go build \
+  --ldflags '-linkmode external -extldflags "-static"' \
+  -o app ./
 
-FROM gcr.io/distroless/base-debian12
-COPY --from=golang /usr/lib/*/libwebp*.so* /usr/lib/
-COPY --from=golang /app/app /achievement-bot
-CMD ["/achievement-bot"]
+FROM scratch
+COPY --from=build /app/app achievement-bot
+CMD ["./achievement-bot"]
