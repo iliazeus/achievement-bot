@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log/slog"
 	"os"
 	"strconv"
@@ -9,6 +10,7 @@ import (
 	// "net/http"
 	// "net/url"
 
+	"github.com/iliazeus/achievement-bot/internal/tg/v2"
 	_ "github.com/joho/godotenv/autoload"
 )
 
@@ -34,7 +36,24 @@ func main() {
 		tempChatId = val
 	}
 
-	err := run(slog, botToken, tempChatId)
+	bot, err := newBot(tempChatId)
+	if err != nil {
+		slog.Error(err.Error())
+		os.Exit(1)
+	}
+
+	cl, err := tg.NewClient(botToken)
+	if err != nil {
+		slog.Error(err.Error())
+		os.Exit(1)
+	}
+
+	slog.Info("starting bot")
+
+	err = bot.RunWithSource(
+		context.Background(),
+		cl, cl.LongPollEventSource(10000),
+	)
 	if err != nil {
 		slog.Error(err.Error())
 		os.Exit(1)
