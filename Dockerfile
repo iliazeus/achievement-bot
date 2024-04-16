@@ -13,6 +13,6 @@ RUN CGO_ENABLED=1 CGO_LDFLAGS='-lsharpyuv' go build \
 
 FROM scratch
 WORKDIR /app
-COPY --from=build /etc/ssl/certs/ca-certificates.crt etc/ssl/certs/ca-certificates.crt
-COPY --from=build /app/app achievement-bot
+COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY --from=build /app/app /app/achievement-bot
 CMD ["/app/achievement-bot"]
